@@ -1,0 +1,240 @@
+stages:
+  - version
+  - compile
+  - build-image
+  - scan-image
+  - git-tag
+  - aws-auth
+  - push-image
+  - update-app-image
+
+semantic-versioning:
+  stage: version
+  image: registry.gitlab.com/platntsist/devops/pipelines/app/semantic-release:v1.1.0
+  script:
+    - semantic-release
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+compile:
+  stage: compile
+  image:
+    name: golang:1.18.0-alpine3.14
+  before_script:
+    - apk update && apk upgrade && apk add --no-cache bash git openssh
+  script:
+    - chmod +x compile.sh
+    - ./compile.sh
+  artifacts:
+    name: "$CI_JOB_NAME-artifacts"
+    paths:
+      - ./compile
+    expire_in: 15 mins
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+      - dockerfile
+      - "*.go"
+      - "*.sum"
+      - "*.mod"
+
+build-image:
+  stage: build-image
+  variables: 
+    DOCKERFILE_NAME: "dockerfile"
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(printf "%s:%s" "${CI_REGISTRY_USER}" "${CI_REGISTRY_PASSWORD}" | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/${DOCKERFILE_NAME}"
+      --destination "${CI_REGISTRY_IMAGE}:${CI_PIPELINE_ID}"
+      --tarPath "./image.tar"
+      --no-push
+  artifacts:
+    name: "$CI_JOB_NAME-artifacts"
+    paths:
+      - ./image.tar
+    expire_in: 15 mins
+  dependencies:
+    - compile
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+      - dockerfile
+      - "*.go"
+      - "*.sum"
+      - "*.mod"
+
+scan-image:
+  stage: scan-image
+  image:
+    name: docker.io/aquasec/trivy:0.22.0
+    entrypoint: [""]
+  # variables:
+    # No need to clone the repo, we exclusively work on artifacts.  See
+    # https://docs.gitlab.com/ee/ci/runners/README.html#git-strategy
+    # GIT_STRATEGY: none
+    # TRIVY_USERNAME: $CI_REGISTRY_USER
+    # TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
+    # TRIVY_AUTH_URL: $CI_REGISTRY
+    # FULL_IMAGE_NAME: $CI_REGISTRY_IMAGE:$CI_PIPELINE_ID
+  script:
+    - trivy --version
+    # cache cleanup is needed when scanning images with the same tags, it does not remove the database
+    - time trivy image --clear-cache
+    # update vulnerabilities db
+    - time trivy --download-db-only --no-progress --cache-dir .trivycache/
+    # Builds report and puts it in the default workdir $CI_PROJECT_DIR, so `artifacts:` can take it from there
+    - time trivy --exit-code 0 --cache-dir .trivycache/ --no-progress --format template --template "@/contrib/gitlab.tpl"
+        --output "$CI_PROJECT_DIR/gl-container-scanning-report.json" --input ./image.tar
+    # Prints full report
+    # - time trivy --exit-code 0 --cache-dir .trivycache/ --no-progress --input ./image.tar
+    # Fail on critical vulnerabilities
+    # - time trivy --exit-code 1 --cache-dir .trivycache/ --severity CRITICAL --no-progress --input ./image.tar
+  cache:
+    paths:
+      - .trivycache/
+  # Enables https://docs.gitlab.com/ee/user/application_security/container_scanning/ (Container Scanning report is available on GitLab EE Ultimate or GitLab.com Gold)
+  artifacts:
+    when: always
+    reports:
+      container_scanning: gl-container-scanning-report.json
+    expire_in: 1 week
+  dependencies:
+    - build-image
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+        - dockerfile
+        - "*.go"
+        - "*.sum"
+        - "*.mod"
+
+get-lastest-git-tag:
+  stage: git-tag
+  image: bitnami/git:2.35.1
+  script:
+    - |- 
+      cat << EOF >> version.env
+      GIT_TAG=$(git describe --tags --abbrev=0)
+      EOF
+  artifacts:
+    reports:
+      dotenv: version.env
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+        - dockerfile
+        - "*.go"
+        - "*.sum"
+        - "*.mod"
+
+gitlab-oidc-aws:
+  stage: aws-auth
+  image:
+    name: amazon/aws-cli:2.4.10
+    entrypoint: [""]
+  before_script:
+    - >
+      STS=($(aws sts assume-role-with-web-identity
+      --role-arn ${AWS_GITLAB_CI_ROLE_ARN}
+      --role-session-name "GitLabRunner-${CI_PROJECT_ID}-${CI_PIPELINE_ID}"
+      --web-identity-token ${CI_JOB_JWT_V2}
+      --duration-seconds 900
+      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+      --output text))
+  script:
+    - export AWS_ACCESS_KEY_ID="${STS[0]}"
+    - export AWS_SECRET_ACCESS_KEY="${STS[1]}"
+    - export AWS_SESSION_TOKEN="${STS[2]}"
+    - AWS_PASSWORD=$(aws ecr get-login-password --region ap-northeast-1)
+    - | 
+      cat << EOF >> aws.env
+      AWS_PASSWORD=${AWS_PASSWORD}
+      AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      EOF
+  artifacts:
+    reports:
+      # Pass env variables to other jobs
+      dotenv: aws.env
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+        - dockerfile
+        - "*.go"
+        - "*.sum"
+        - "*.mod"
+
+gitlab-registry:
+  stage: push-image
+  needs: [build-image, scan-image, get-lastest-git-tag]
+  image:
+    name: gcr.io/go-containerregistry/crane:debug
+    entrypoint: [""]
+  before_script:
+    - crane auth login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script: 
+    - crane push ./image.tar ${CI_REGISTRY_IMAGE}:${GIT_TAG}
+  dependencies:
+    - build-image
+    - get-lastest-git-tag
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+        - dockerfile
+        - "*.go"
+        - "*.sum"
+        - "*.mod"
+
+aws-ecr:
+  stage: push-image
+  image:
+    name: gcr.io/go-containerregistry/crane:debug
+    entrypoint: [""]
+  before_script:
+    - crane auth login -u AWS -p $AWS_PASSWORD $AWS_ECR_URL
+    - REGISTRY_NAME=$(echo ${CI_PROJECT_NAME} | tr '[:upper:]' '[:lower:]')
+  script: 
+    - crane push ./image.tar ${AWS_ECR_URL}/${REGISTRY_NAME}:${GIT_TAG}
+  dependencies:
+    - gitlab-oidc-aws
+    - build-image
+    - get-lastest-git-tag
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+      changes:
+        - dockerfile
+        - "*.go"
+        - "*.sum"
+        - "*.mod"
+
+update_app_image:
+  stage: update-app-image
+  image: bitnami/git:2.35.1
+  before_script:
+    - git clone "https://${UPDATE_APP_IMAGE_USERNAME}:${UPDATE_APP_IMAGE_TOKEN}@${CI_SERVER_HOST}/platntsist/devops/app/${CI_PROJECT_NAME}.git" "${CI_COMMIT_SHA}"
+    - git config --global user.email "noreply@ci.plantsist.com"
+    - git config --global user.name "ci-image-updater"
+  script:
+    - cd ${CI_COMMIT_SHA}
+    - |-
+      # MAX version : v999.999.999
+      sed -i "s/appVersion: v[0-9]\{1,3\}.[0-9]\{1,3\}.[0-9]\{1,3\}/appVersion: ${GIT_TAG}/g" Chart.yaml
+
+    - git add .
+    - git commit -m "build:automatic update of ${CI_PROJECT_NAME}"
+    - git push origin main
+  rules:
+     - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+       changes:
+        - dockerfile
+        - "*.go"
+        - "*.sum"
+        - "*.mod"
