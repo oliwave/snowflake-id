@@ -19,11 +19,11 @@
 //		a. Get available and ready worker nodes
 //			1. Select a node
 //			2. check if the node is registered
-//				TRUE: Check if the `replicaSet` doesn't reach the maximum of 32 pods within the same worker node
+//.				TRUE: Check if the `replicaSet` doesn't reach the maximum of 32 pods within the same worker node
 //					TRUE: a. Add the pod to the node
 // 						  b. return data center id and worker id (5. Attach ENV to pod)
 //					FALSE: jump to (4.a.1)
-//              FALSE: Check if the `replicaSet` doesn't exist on a maximum of 32 nodes
+//.				FALSE: Check if the `replicaSet` doesn't exist on a maximum of 32 nodes
 //					TRUE: a. Register the node and add the pod to it
 // 						  b. return data center id and worker id (5. Attach ENV to pod)
 //					FALSE: jump to (4.a.1)
