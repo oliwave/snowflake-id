@@ -17,16 +17,16 @@
 //
 // 4. Schedule Pod to node
 //		a. Get available and ready worker nodes
-//			1. Select a node
+//			1. Select a node (random)
 //			2. check if the node is registered
 //				TRUE: Check if the `replicaSet` doesn't reach the maximum of 32 pods within the same worker node
-//					TRUE: a. Add the pod to the node
+//					TRUE: a. Add the pod to the node (save to Redis)
 // 						  b. return data center id and worker id (5. Attach ENV to pod)
 //					FALSE: jump to (4.a.1)
-//              FALSE: Check if the `replicaSet` doesn't exist on a maximum of 32 nodes
-//					TRUE: a. Register the node and add the pod to it
+//				FALSE: Check if the `replicaSet` doesn't exist on a maximum of 32 nodes
+//					TRUE: a. Register the node and add the pod to it (save to Redis)
 // 						  b. return data center id and worker id (5. Attach ENV to pod)
-//					FALSE: jump to (4.a.1)
+//					FALSE: jump to (4.a.1) UPDATED:[從 32 節點去挑要部署的 pod 即可]
 //
 // 5. Attach ENV to pod
 
