@@ -21,7 +21,9 @@ type AppScheduler struct {
 	pod *coreV1.Pod
 }
 
-const MAX_ID int = 32
+const START_ID int = 1
+const MAX_ID int = 31
+const MAX_POD_NUM int = MAX_ID * MAX_ID
 
 func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 	// 3. Get the `replicaSet` of the pod
@@ -29,8 +31,8 @@ func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 
 	pa := populateApp(rsName)
 
-	if getTotalPod(pa) == 1024 {
-		return &snowflake{}, fmt.Errorf("the serivce `%v` has reached the maximum pod numbers of 1024", rsName)
+	if getTotalPod(pa) == 961 {
+		return &snowflake{}, fmt.Errorf("the serivce `%v` has reached the maximum pod numbers of %v", rsName, MAX_POD_NUM)
 	}
 
 	// 4. Schedule Pod to node
@@ -52,7 +54,7 @@ func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 		for i, n := range pa.Nodes {
 			if n.Name == selectedNodeName { // Node is registered
 				registered = true
-				if len(n.Pods) == 32 { // reach the maximum number of pods that a single node can hold
+				if len(n.Pods) == MAX_ID { // reach the maximum number of pods that a single node can hold
 					break
 				}
 
@@ -61,7 +63,7 @@ func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 
 				sort.Sort(n.Pods)
 
-				for id := 0; id < MAX_ID; id++ {
+				for id := START_ID; id < MAX_ID; id++ {
 					selectedID = id
 					if id > len(n.Pods)-1 {
 						break
@@ -86,7 +88,7 @@ func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 		}
 
 		if !registered { // Node is unregistered
-			if len(pa.Nodes) == 32 { // reach the maximum number of nodes that app can scale on
+			if len(pa.Nodes) == MAX_ID { // reach the maximum number of nodes that app can scale on
 				continue
 			}
 
@@ -94,7 +96,7 @@ func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 
 			sort.Sort(pa.Nodes)
 
-			for id := 0; id < MAX_ID; id++ {
+			for id := START_ID; id < MAX_ID; id++ {
 				selectedID = id
 				if id > len(pa.Nodes)-1 {
 					break
@@ -109,7 +111,7 @@ func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 				ID:   selectedID,
 				Pods: []pod{
 					{
-						ID: 0,
+						ID: START_ID,
 					},
 				},
 			})
@@ -119,7 +121,7 @@ func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
 			return &snowflake{
 				nodeName:     selectedNodeName,
 				datacenterId: selectedID,
-				workerId:     0,
+				workerId:     START_ID,
 			}, nil
 		}
 	}
