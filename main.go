@@ -11,7 +11,7 @@
 //
 // 3. Get the `replicaSet` of the pod
 //		a. Retrieve the amount of pods which are controlled by its `replicaSet` (from Redis)
-//		 	1. check if pods num <= 1024 (32 * 32)
+//		 	1. check if pods num <= 961 (31 * 31)
 //				TRUE: jump to (4. Schedule Pod to node)
 //				FALSE: return nil and ERROR
 //
@@ -19,14 +19,14 @@
 //		a. Get available and ready worker nodes
 //			1. Select a node (random)
 //			2. check if the node is registered
-//				TRUE: Check if the `replicaSet` doesn't reach the maximum of 32 pods within the same worker node
+//				TRUE: Check if the `replicaSet` doesn't reach the maximum of 31 pods within the same worker node
 //					TRUE: a. Add the pod to the node (save to Redis)
 // 						  b. return data center id and worker id (5. Attach ENV to pod)
 //					FALSE: jump to (4.a.1)
-//				FALSE: Check if the `replicaSet` doesn't exist on a maximum of 32 nodes
+//				FALSE: Check if the `replicaSet` doesn't exist on a maximum of 31 nodes
 //					TRUE: a. Register the node and add the pod to it (save to Redis)
 // 						  b. return data center id and worker id (5. Attach ENV to pod)
-//					FALSE: jump to (4.a.1) UPDATED:[從 32 節點去挑要部署的 pod 即可]
+//					FALSE: jump to (4.a.1) UPDATED:[從 31 節點去挑要部署的 pod 即可]
 //
 // 5. Attach ENV to pod
 
@@ -77,6 +77,7 @@ func startServer() {
 	go func() {
 		healthHttp := http.NewServeMux()
 		healthHttp.HandleFunc("/health", HandleHealth)
+		// WARNING : 如果 port 有衝突請修改此 port!
 		log.Fatal(http.ListenAndServe(":43000", healthHttp))
 	}()
 
