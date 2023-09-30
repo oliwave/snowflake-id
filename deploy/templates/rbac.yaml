@@ -1,0 +1,29 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ template "snowflake-id.fullname" . }}-role
+  labels:
+    {{- include "snowflake-id.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: [pods, nodes]
+  verbs: [get, list, watch]
+- apiGroups: ["*"]
+  resources: [replicaset]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ template "snowflake-id.fullname" . }}-rolebinding
+  labels:
+    {{- include "snowflake-id.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ template "snowflake-id.fullname" . }}-role
+subjects:
+- kind: ServiceAccount
+  name: {{ template "snowflake-id.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}

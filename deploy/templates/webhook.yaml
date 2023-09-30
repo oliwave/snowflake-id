@@ -1,0 +1,45 @@
+{{ $tls := fromYaml ( include "snowflake-id.webhookCerts" . ) }}
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "snowflake-id.namePrefix" . }}-webhook
+  labels:
+    {{- include "snowflake-id.labels" . | nindent 4 }}
+webhooks:
+  - name: "{{ template "snowflake-id.webhookService" . }}.default.svc"
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "DELETE"]
+        resources: ["pods"]
+        scope: "Namespaced"
+    clientConfig:
+      service:
+        name: {{ template "snowflake-id.webhookService" . }}
+        namespace: {{ $.Release.Namespace }}
+        path: /mutate-v1-pod
+      caBundle: {{ $tls.caCert }}
+    admissionReviewVersions: ["v1beta1"]
+    objectSelector:
+      matchExpressions:
+      - key: app.kubernetes.io/instance
+        operator: NotIn
+        values:
+        - {{ include "snowflake-id.name" . }}
+    sideEffects: None
+    timeoutSeconds: 15
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ template "snowflake-id.webhookCertSecret" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "snowflake-id.labels" . | indent 4 }}
+type: kubernetes.io/tls
+data:
+  ca.crt: {{ $tls.caCert }}
+  tls.crt: {{ $tls.clientCert }}
+  tls.key: {{ $tls.clientKey }}

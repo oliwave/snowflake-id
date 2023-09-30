@@ -26,12 +26,6 @@ func (a *admission) populateRequest(admissionRequestBody []byte) {
 		a.w.WriteHeader(http.StatusBadRequest)
 		errors.New("malformed admission review: request is nil")
 	}
-
-	// fmt.Printf("Type: %v \t Event: %v \t Name: %v \n",
-	// 	a.review.Request.Kind,
-	// 	a.review.Request.Operation,
-	// 	a.review.Request.Name,
-	// )
 }
 
 // func (a *admission) sendAdmissionResponse(allowed bool, patchBytes []byte, result *v1.Status, warnings []string) {
