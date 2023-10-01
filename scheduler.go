@@ -22,7 +22,7 @@ type AppScheduler struct {
 }
 
 const START_ID int = 1
-const MAX_ID int = 31
+const MAX_ID int = 32
 const MAX_POD_NUM int = MAX_ID * MAX_ID
 
 func (s *AppScheduler) schedulePod(podName string) (*snowflake, error) {
