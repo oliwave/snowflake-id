@@ -21,12 +21,9 @@
 
 ### Prerequisite 
 
-1. Download Software
-    -  [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - a local Kubernetes cluster
-    -  [Skaffold](https://skaffold.dev/docs/install/) - Local Kubernetes Development.
-
-2. Clone Helm chart to local
-    - `git clone git@gitlab.com:platntsist/devops/app/snowflake-id.git`
+Download Software
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - a local Kubernetes cluster
+- [Skaffold](https://skaffold.dev/docs/install/) - Local Kubernetes Development.
 
 ### Setup kind & Skaffold configuration files
 1. clone current project
