@@ -1,20 +1,37 @@
 # snowflake_id
 
+[Snowflake ID](https://en.wikipedia.org/wiki/Snowflake_ID) is an algorithm created by Twitter for generating unique identifiers under distributed systems. This project is meant to create these IDs for applications hosted in the Kubernetes environment. With the help of [AdmissionWebhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/), the customized snowflake-id controller can intercept the pod creation/deletion events and verify if the pod is annotated with the label `snowflake-id.io/enabled` with `true` value. If so, the controller will modify the pod spec for you, attaching generated values, `SNOWFLAKE_DATA_CENTER_ID` and `SNOWFLAKE_WORKER_ID`, to the environment fields.
+
+## System Design
+
+### Terminology Redefinition
+
+10 bits represent a machine ID consisting of 5 bits for worker nodes and 5 bits for pods
+- Data Center ID -> worker node
+- Worker ID -> pod
+
+### Limitation factor
+1. A single microservice can only be deployed to the utmost 32 worker nodes
+2. A single microservice can only be deployed to a single worker node for the utmost 32 pods
+3. A single microservice can have 1032 pods (32*32)
+
+![snowflake-id](https://github.com/oliwave/snowflake-id/assets/27968072/15c64322-2e79-401c-9984-13cb07097df8)
+
 ## Local development
 
 ### Prerequisite 
 
-1. Download software
-    -  [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - a local Kuberentes cluster
+1. Download Software
+    -  [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - a local Kubernetes cluster
     -  [Skaffold](https://skaffold.dev/docs/install/) - Local Kubernetes Development.
 
 2. Clone Helm chart to local
     - `git clone git@gitlab.com:platntsist/devops/app/snowflake-id.git`
 
-### Setup kind & Skaffold conifguration files
+### Setup kind & Skaffold configuration files
 1. clone current project
 2. `cd snowflake-id`
-3. create following files
+3. create the following files
     - ```yaml=
       # kind.yaml
       ---
@@ -42,7 +59,7 @@
         - image: snowflake_id
           # An alpha feature https://skaffold.dev/docs/pipeline-stages/lifecycle-hooks/
           #
-          # WARNING - please create target file (in this case should be `webhook`) before execute skaffold
+          # WARNING - please create a target file (in this case should be `webhook`) before executing skaffold
           hooks:
             before:
               - command: ["sh", "-c", "./compile.sh"]
