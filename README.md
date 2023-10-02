@@ -1,6 +1,6 @@
 # snowflake_id
 
-[Snowflake ID](https://en.wikipedia.org/wiki/Snowflake_ID) is an algorithm created by Twitter for generating unique identifiers under distributed systems. This project is meant to create these IDs for applications hosted in the Kubernetes environment. With the help of [AdmissionWebhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/), the customized snowflake-id controller can intercept the pod creation/deletion events and verify if the pod is annotated with the label `snowflake-id.io/enabled` with `true` value. If so, the controller will modify the pod spec for you, attaching generated values, `SNOWFLAKE_DATA_CENTER_ID` and `SNOWFLAKE_WORKER_ID`, to the environment fields.
+[Snowflake ID](https://en.wikipedia.org/wiki/Snowflake_ID) is an algorithm created by Twitter for generating unique identifiers under distributed systems. This project is meant to create these IDs for applications hosted in the Kubernetes environment. With the help of [AdmissionWebhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/), the customized snowflake-id controller can intercept the pod creation/deletion events from Kubernetes API server and verify if the pod is annotated with the label `snowflake-id.io/enabled` with `true` value. If so, the controller will modify the pod spec for you, attaching generated values, `SNOWFLAKE_DATA_CENTER_ID` and `SNOWFLAKE_WORKER_ID`, to the environment fields, and deploy the pod to the designated node.
 
 ## System Design
 
