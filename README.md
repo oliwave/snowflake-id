@@ -13,7 +13,7 @@
 ### Limitation factor
 1. A single microservice can only be deployed to the utmost 32 worker nodes
 2. A single microservice can only be deployed to a single worker node for the utmost 32 pods
-3. A single microservice can have 1032 pods (32*32)
+3. A single microservice can have 1024 pods (32*32)
 
 ![snowflake-id](https://github.com/oliwave/snowflake-id/assets/27968072/15c64322-2e79-401c-9984-13cb07097df8)
 
